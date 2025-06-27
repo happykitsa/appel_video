@@ -1,11 +1,26 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import sqlite3
 import os
+import json
 
 app = FastAPI()
+# Dictionnaire pour stocker les connexions des utilisateurs connectés {username: websocket}
+clients = {}
+
+async def broadcast_user_list():
+    """
+    Envoie à tous les clients la liste actuelle des utilisateurs connectés.
+    """
+    users = list(clients.keys())
+    message = json.dumps({"type": "user_list", "users": users})
+    for ws in clients.values():
+        try:
+            await ws.send(message)
+        except:
+            pass  # On ignore les erreurs ici pour éviter de bloquer tout le serveur
 
 # Middleware CORS pour autoriser l'accès au frontend
 app.add_middleware(
@@ -63,3 +78,29 @@ async def login_user(username: str):
 
 
 
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, username: str):
+    await websocket.accept()
+    clients[username] = websocket
+    print(f"{username} connecté via WebSocket.")
+    await broadcast_user_list()
+
+    try:
+        while True:
+            message = await websocket.receive_text()
+            data = json.loads(message)
+            target = data.get("target")
+
+            if target in clients:
+                await clients[target].send_text(json.dumps(data))
+                print(f"Message envoyé de {data['name']} à {target}: {data['type']}")
+            else:
+                await websocket.send_text(json.dumps({"type": "error", "message": "Utilisateur cible non connecté"}))
+    except WebSocketDisconnect:
+        for user, ws_conn in list(clients.items()):
+            if ws_conn == websocket:
+                print(f"{user} déconnecté du WebSocket.")
+                del clients[user]
+                break
+        await broadcast_user_list()

@@ -17,7 +17,7 @@ async function register() {
   }
 
   try {
-    const res = await fetch("http://DESKTOP-L05GD3B:8000/api/register", {  // Note : /api/register
+    const res = await fetch("/api/register", {  // Note : /api/register
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username })
@@ -41,7 +41,7 @@ async function register() {
 
 // Ouvre la connexion WebSocket vers le serveur de signalisation
 function openWebSocket() {
-  ws = new WebSocket("ws://DESKTOP-L05GD3B:8765");
+  ws = new WebSocket(`ws://${window.location.host}/ws?username=${currentUser}`);
 
 
   ws.onopen = () => {
