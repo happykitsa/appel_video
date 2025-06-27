@@ -16,10 +16,12 @@ async def broadcast_user_list():
     """
     users = list(clients.keys())
     message = json.dumps({"type": "user_list", "users": users})
+    print(f"Diffusion de la liste des utilisateurs: {users}")
     for ws in clients.values():
         try:
-            await ws.send(message)
-        except:
+            await ws.send_text(message)
+        except Exception as e:
+            print(f"Erreur lors de l'envoi de la liste des utilisateurs à un client: {e}")
             pass  # On ignore les erreurs ici pour éviter de bloquer tout le serveur
 
 # Middleware CORS pour autoriser l'accès au frontend
@@ -83,20 +85,26 @@ async def login_user(username: str):
 async def websocket_endpoint(websocket: WebSocket, username: str):
     await websocket.accept()
     clients[username] = websocket
-    print(f"{username} connecté via WebSocket.")
+    print(f"{username} connecté via WebSocket. Clients actuels: {list(clients.keys())}")
     await broadcast_user_list()
 
     try:
         while True:
             message = await websocket.receive_text()
             data = json.loads(message)
-            target = data.get("target")
-
-            if target in clients:
-                await clients[target].send_text(json.dumps(data))
-                print(f"Message envoyé de {data['name']} à {target}: {data['type']}")
+ 
+            if data.get("type") == "login":
+                # Le message de login est déjà géré par l'ajout au dictionnaire clients
+                # et le broadcast de la liste des utilisateurs.
+                # On ne fait rien de plus ici pour ce type de message.
+                print(f"Message de login reçu de {data.get('name')}. Pas de cible requise.")
             else:
-                await websocket.send_text(json.dumps({"type": "error", "message": "Utilisateur cible non connecté"}))
+                target = data.get("target")
+                if target in clients:
+                    await clients[target].send_text(json.dumps(data))
+                    print(f"Message envoyé de {data['name']} à {target}: {data['type']}")
+                else:
+                    await websocket.send_text(json.dumps({"type": "error", "message": "Utilisateur cible non connecté"}))
     except WebSocketDisconnect:
         for user, ws_conn in list(clients.items()):
             if ws_conn == websocket:

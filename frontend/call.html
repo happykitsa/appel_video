@@ -3,243 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <title>Appel Vidéo</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; }
-    video { width: 100%; max-width: 600px; background: #000; }
-    #status { margin-top: 10px; color: green; }
-  </style>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
-<body>
-  <h2>Bienvenue à l'appel vidéo, <span id="usernameDisplay"></span> !</h2>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+  <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-2xl">
+    <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Bienvenue à l'appel vidéo, <span id="usernameDisplay" class="text-blue-600"></span> !</h2>
 
-  <!-- Vidéo locale (caméra) -->
-  <video id="localVideo" autoplay playsinline muted></video>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div>
+        <label class="block text-gray-700 text-sm font-bold mb-2">Votre vidéo:</label>
+        <video id="localVideo" autoplay playsinline muted class="w-full h-48 bg-black rounded-lg shadow-inner"></video>
+      </div>
+      <div>
+        <label class="block text-gray-700 text-sm font-bold mb-2">Vidéo distante:</label>
+        <video id="remoteVideo" autoplay playsinline class="w-full h-48 bg-black rounded-lg shadow-inner"></video>
+      </div>
+    </div>
 
-  <!-- Vidéo distante (de l'interlocuteur) -->
-  <video id="remoteVideo" autoplay playsinline></video>
+    <div class="mb-4">
+      <label for="usersSelect" class="block text-gray-700 text-sm font-bold mb-2">Appeler un utilisateur:</label>
+      <select id="usersSelect"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        <option value="">Sélectionner un utilisateur</option>
+      </select>
+    </div>
 
-  <!-- Liste déroulante des utilisateurs connectés -->
-  <select id="usersSelect"></select>
+    <button id="callBtn" disabled
+            class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full flex items-center justify-center">
+      <i class="fas fa-phone-alt mr-2"></i> Appeler
+    </button>
 
-  <!-- Bouton pour lancer l'appel -->
-  <button id="callBtn" disabled>Appeler</button>
+    <div id="status" class="mt-4 text-center text-sm font-medium text-gray-600">Connexion au serveur...</div>
+  </div>
 
-  <!-- Zone de message d'état -->
-  <div id="status">Connexion au serveur...</div>
-
-  <script>
-    // Récupérer le nom d'utilisateur passé en paramètre d'URL (ex: call.html?user=Happy)
-    const urlParams = new URLSearchParams(window.location.search);
-    const username = urlParams.get('user') || "Anonyme"; // par défaut "Anonyme"
-    document.getElementById('usernameDisplay').textContent = username;
-
-    // Adresse du serveur WebSocket de signalisation (modifie si besoin)
-    const signalingUrl = `ws://${window.location.host}/ws?username=${username}`;
-
-
-    let ws;           // Objet WebSocket
-    let pc;           // RTCPeerConnection
-    let localStream;  // Flux média local (caméra + micro)
-    let remoteStream = new MediaStream();  // Flux média distant (appelant)
-
-    const usersSelect = document.getElementById('usersSelect');
-    const callBtn = document.getElementById('callBtn');
-    const statusDiv = document.getElementById('status');
-    const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-
-    // Configuration ICE STUN pour faciliter la traversée NAT/firewall
-    const configuration = {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    };
-
-    // Connexion au serveur WebSocket et gestion des événements
-    function connectWebSocket() {
-      ws = new WebSocket(signalingUrl);
-
-      ws.onopen = () => {
-        statusDiv.textContent = 'Connecté au serveur de signalisation.';
-        // Envoyer un message d'identification au serveur (login)
-        ws.send(JSON.stringify({ type: 'login', name: username }));
-      };
-
-      ws.onerror = (error) => {
-        statusDiv.textContent = 'Erreur de connexion au serveur.';
-        console.error('WebSocket error:', error);
-      };
-
-      ws.onmessage = async (event) => {
-        const data = JSON.parse(event.data);
-        console.log('Message reçu:', data);
-
-        // Traiter selon le type de message reçu
-        switch(data.type) {
-          case 'login':
-            if(data.success) {
-              // Affiche les utilisateurs en ligne sauf soi-même
-              statusDiv.textContent = "Connexion réussie. Utilisateurs en ligne : " + data.users.filter(u => u !== username).join(', ');
-              updateUserList(data.users);
-            } else {
-              alert("Nom déjà pris, veuillez en choisir un autre.");
-            }
-            break;
-
-          case 'user_list':
-            updateUserList(data.users);
-            break;
-
-          case 'offer':
-            await handleOffer(data);
-            break;
-
-          case 'answer':
-            await handleAnswer(data);
-            break;
-
-          case 'candidate':
-            await handleCandidate(data);
-            break;
-
-          case 'leave':
-            handleLeave();
-            break;
-
-          default:
-            console.log('Type de message inconnu:', data.type);
-        }
-      };
-
-      ws.onclose = () => {
-        statusDiv.textContent = 'Déconnecté du serveur.';
-      };
-    }
-
-    // Met à jour la liste déroulante des utilisateurs disponibles
-    function updateUserList(users) {
-      usersSelect.innerHTML = ''; // Vide la liste
-      users.filter(u => u !== username).forEach(u => {
-        const option = document.createElement('option');
-        option.value = u;
-        option.text = u;
-        usersSelect.appendChild(option);
-      });
-      // Activer le bouton "Appeler" uniquement s'il y a au moins un utilisateur
-      callBtn.disabled = usersSelect.options.length === 0;
-    }
-
-    // Création de la connexion WebRTC et ajout du flux local
-    async function createPeerConnection() {
-      pc = new RTCPeerConnection(configuration);
-
-      // Ajouter toutes les pistes du flux local (vidéo et audio)
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-      // Quand un flux distant arrive, on l'ajoute à remoteStream
-      pc.ontrack = (event) => {
-        event.streams[0].getTracks().forEach(track => {
-          remoteStream.addTrack(track);
-        });
-      };
-
-      // Envoyer ICE candidates au serveur de signalisation
-      pc.onicecandidate = (event) => {
-        if(event.candidate) {
-          ws.send(JSON.stringify({
-            type: 'candidate',
-            candidate: event.candidate,
-            name: username,
-            target: usersSelect.value
-          }));
-        }
-      };
-
-      remoteVideo.srcObject = remoteStream;
-    }
-
-    // Démarre l'appel en tant qu'initiateur
-    async function startCall() {
-      await createPeerConnection();
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      ws.send(JSON.stringify({
-        type: 'offer',
-        sdp: offer.sdp,
-        name: username,
-        target: usersSelect.value
-      }));
-
-      statusDiv.textContent = `Offre envoyée à ${usersSelect.value}`;
-    }
-
-    // Réception et gestion d'une offre (appel entrant)
-    async function handleOffer(data) {
-      await createPeerConnection();
-
-      const desc = new RTCSessionDescription({ type: 'offer', sdp: data.sdp });
-      await pc.setRemoteDescription(desc);
-
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      ws.send(JSON.stringify({
-        type: 'answer',
-        sdp: answer.sdp,
-        name: username,
-        target: data.name
-      }));
-
-      statusDiv.textContent = `Réponse envoyée à ${data.name}`;
-    }
-
-    // Réception d'une réponse (acceptation de l'appel)
-    async function handleAnswer(data) {
-      const desc = new RTCSessionDescription({ type: 'answer', sdp: data.sdp });
-      await pc.setRemoteDescription(desc);
-      statusDiv.textContent = `Réponse reçue de ${data.name}`;
-    }
-
-    // Réception d'une ICE candidate
-    async function handleCandidate(data) {
-      if (pc) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-          statusDiv.textContent = `Candidat ICE reçu de ${data.name}`;
-        } catch (e) {
-          console.error('Erreur ajout candidat ICE:', e);
-        }
-      }
-    }
-
-    // Gestion quand l'autre utilisateur quitte l'appel
-    function handleLeave() {
-      if (pc) {
-        pc.close();
-        pc = null;
-      }
-      remoteStream = new MediaStream();
-      remoteVideo.srcObject = remoteStream;
-      statusDiv.textContent = 'L\'autre utilisateur a quitté.';
-    }
-
-    // Initialisation : accès caméra + micro local
-    async function startLocalVideo() {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        localVideo.srcObject = localStream;
-      } catch (e) {
-        alert('Impossible d\'accéder à la caméra/microphone : ' + e.message);
-      }
-    }
-
-    // Assigner l'événement au clic du bouton Appeler
-    callBtn.onclick = startCall;
-
-    // Démarrage du script : démarrer vidéo locale + connexion WebSocket
-    startLocalVideo();
-    connectWebSocket();
-  </script>
-  <script src="script.js"></script>
+  <script src="/static/script.js"></script>
 
 </body>
 </html>
