@@ -34,7 +34,7 @@
     document.getElementById('usernameDisplay').textContent = username;
 
     // Adresse du serveur WebSocket de signalisation (modifie si besoin)
-    const signalingUrl = 'ws://192.168.231.34:8765';  // remplace par ton IP réelle
+    const signalingUrl = `ws://${window.location.host}/ws?username=${username}`;
 
 
     let ws;           // Objet WebSocket

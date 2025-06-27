@@ -57,7 +57,7 @@
 
         if (action === "signup") {
           // Appel POST vers /api/register pour inscription
-          response = await fetch(`http://${host}:8000/api/register`, {
+          response = await fetch(`/api/register`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json"
@@ -66,7 +66,7 @@
           });
         } else if (action === "login") {
           // Appel GET vers /api/login pour connexion
-         response = await fetch(`http://${host}:8000/api/login?username=${encodeURIComponent(username)}`);
+         response = await fetch(`/api/login?username=${encodeURIComponent(username)}`);
 
         }
 
@@ -79,7 +79,7 @@
 
           // Redirection vers call.html avec paramètre username après 1 seconde
           setTimeout(() => {
-            window.location.href = `http://${host}:8001/call.html?user=${encodeURIComponent(username)}`;
+            window.location.href = `/static/call.html?user=${encodeURIComponent(username)}`;
 
           }, 1000);
         } else {
