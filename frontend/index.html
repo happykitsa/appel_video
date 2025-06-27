@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Appel Vidéo - Connexion</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 20px;
+      max-width: 500px;
+      margin: auto;
+    }
+    input, select, button {
+      margin-top: 10px;
+      padding: 10px;
+      width: 100%;
+    }
+    #status {
+      margin-top: 15px;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <h2>Connexion à l'appel vidéo</h2>
+
+  <!-- Champ pour entrer le nom d'utilisateur -->
+  <input type="text" id="username" placeholder="Nom d'utilisateur" />
+
+  <!-- Choix entre s'inscrire et se connecter -->
+  <select id="action">
+    <option value="signup">S'inscrire</option>
+    <option value="login">Se connecter</option>
+  </select>
+
+  <!-- Bouton pour envoyer les infos -->
+  <button onclick="submitUser()">Valider</button>
+
+  <!-- Message de retour -->
+  <div id="status"></div>
+
+  <script>
+    // Fonction appelée au clic sur "Valider"
+    async function submitUser() {
+      const username = document.getElementById("username").value.trim();
+      const action = document.getElementById("action").value;
+      const statusDiv = document.getElementById("status");
+      const host = window.location.hostname;
+
+      if (!username) {
+        alert("Veuillez entrer un nom d'utilisateur.");
+        return;
+      }
+
+      try {
+        let response, result;
+
+        if (action === "signup") {
+          // Appel POST vers /api/register pour inscription
+          response = await fetch(`http://${host}:8000/api/register`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ username })
+          });
+        } else if (action === "login") {
+          // Appel GET vers /api/login pour connexion
+         response = await fetch(`http://${host}:8000/api/login?username=${encodeURIComponent(username)}`);
+
+        }
+
+        result = await response.json();
+
+        if (result.success) {
+          // Succès : message vert
+          statusDiv.style.color = "green";
+          statusDiv.textContent = action === "signup" ? "Inscription réussie" : "Connexion réussie";
+
+          // Redirection vers call.html avec paramètre username après 1 seconde
+          setTimeout(() => {
+            window.location.href = `http://${host}:8001/call.html?user=${encodeURIComponent(username)}`;
+
+          }, 1000);
+        } else {
+          // Échec : message rouge avec raison
+          statusDiv.style.color = "red";
+          statusDiv.textContent = result.message || "Erreur inconnue";
+        }
+      } catch (err) {
+        // Erreur réseau ou serveur
+       statusDiv.style.color = "red";
+       statusDiv.textContent = "Erreur de connexion avec le serveur.";
+
+      }
+    }
+  </script>
+  <script src="script.js"></script>
+ 
+</body>
+</html>
+
+
