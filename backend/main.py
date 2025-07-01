@@ -55,22 +55,20 @@ async def register_user(request: Request):
         return {"success": False, "message": "Nom requis"}
 
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10)
-        c = conn.cursor()
-        c.execute("INSERT INTO utilisateurs (nom_utilisateur) VALUES (?)", (username,))
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO utilisateurs (nom_utilisateur) VALUES (?)", (username,))
+            conn.commit()
         return {"success": True}
     except sqlite3.IntegrityError:
         return {"success": False, "message": "Nom déjà pris"}
 
 @app.get("/api/login")
 async def login_user(username: str):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT * FROM utilisateurs WHERE nom_utilisateur = ?", (username,))
-    result = c.fetchone()
-    conn.close()
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT * FROM utilisateurs WHERE nom_utilisateur = ?", (username,))
+        result = c.fetchone()
 
     if result:
         return {"success": True}

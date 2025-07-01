@@ -73,8 +73,9 @@ async function login() {
 
 // Ouvre la connexion WebSocket vers le serveur de signalisation
 function openWebSocket(username) {
-  ws = new WebSocket(`ws://${window.location.host}/ws?username=${username}`);
-  console.log(`Tentative de connexion WebSocket à ws://${window.location.host}/ws?username=${username}`);
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${window.location.host}/ws?username=${username}`);
+  console.log(`Tentative de connexion WebSocket à ${protocol}//${window.location.host}/ws?username=${username}`);
  
   ws.onopen = () => {
     console.log("Connexion WebSocket ouverte.");
@@ -189,6 +190,7 @@ let localStream;
 let remoteStream = new MediaStream();
 
 async function setupConnection() {
+  console.log("setupConnection: Initialisation de la connexion RTCPeerConnection.");
   pc = new RTCPeerConnection(config); // Utilise la config globale
 
   pc.onicecandidate = (event) => {
@@ -207,24 +209,29 @@ async function setupConnection() {
   };
 
   try {
-    console.log("Tentative d'accès à la caméra/microphone...");
+    console.log("setupConnection: Tentative d'accès à la caméra/microphone via getUserMedia...");
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    console.log("Accès à la caméra/microphone réussi. Ajout des pistes au PeerConnection.");
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    const localVideoElement = document.getElementById("localVideo");
-    if (localVideoElement) {
-      localVideoElement.srcObject = localStream;
-      console.log("Flux local assigné à #localVideo.");
+    if (localStream) {
+      console.log("setupConnection: Accès à la caméra/microphone réussi. Flux local obtenu:", localStream);
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      const localVideoElement = document.getElementById("localVideo");
+      if (localVideoElement) {
+        localVideoElement.srcObject = localStream;
+        console.log("Flux local assigné à #localVideo.");
+      } else {
+        console.error("Élément #localVideo non trouvé.");
+      }
     } else {
-      console.error("Élément #localVideo non trouvé.");
+      console.error("getUserMedia n'a pas retourné de flux.");
     }
   } catch (e) {
-    console.error('Erreur lors de l\'accès à la caméra/microphone:', e);
-    alert('Impossible d\'accéder à la caméra/microphone : ' + e.message);
+    console.error('setupConnection: Erreur lors de l\'accès à la caméra/microphone:', e);
+    alert('Impossible d\'accéder à la caméra/microphone. Veuillez autoriser l\'accès à la caméra et au microphone dans les paramètres de votre navigateur. Erreur: ' + e.message);
   }
 }
 
 async function startCall() {
+  console.log("startCall: Début de l'appel.");
   const usersSelect = document.getElementById('usersSelect');
   if (!usersSelect || !usersSelect.value) {
     alert("Veuillez sélectionner un utilisateur à appeler.");
@@ -246,6 +253,7 @@ async function startCall() {
 }
 
 async function handleOffer(sdp) {
+  console.log("handleOffer: Traitement de l'offre reçue.");
   await setupConnection();
 
   await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp }));
@@ -300,7 +308,7 @@ function initCallPage() {
   }
 
   openWebSocket(currentUser); // Ouvre la connexion WebSocket pour la page d'appel
-  setupConnection(); // Initialise la connexion WebRTC et le flux vidéo local
+  setupConnection(); // Initialise la connexion WebRTC et le flux vidéo local dès l'entrée de la page
 }
  
 // Met à jour la liste des utilisateurs disponibles (hors soi-même)
