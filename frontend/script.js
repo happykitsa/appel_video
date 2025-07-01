@@ -206,7 +206,17 @@ async function setupConnection() {
   };
 
   pc.ontrack = (event) => {
-    document.getElementById("remoteVideo").srcObject = event.streams[0];
+    console.log("pc.ontrack: Événement ontrack déclenché. Streams:", event.streams);
+    if (event.streams && event.streams[0]) {
+      document.getElementById("remoteVideo").srcObject = event.streams[0];
+      console.log("pc.ontrack: Flux distant assigné à #remoteVideo.");
+    } else {
+      console.warn("pc.ontrack: Aucun flux valide dans event.streams[0].");
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    console.log(`ICE connection state: ${pc.iceConnectionState}`);
   };
 
   try {
