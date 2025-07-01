@@ -2,6 +2,7 @@ let ws;                 // Connexion WebSocket globale
 let currentUser = null; // Nom utilisateur courant
 let targetUser = null;  // Cible de l'appel WebRTC
 let pc;                 // RTCPeerConnection WebRTC
+let iceCandidatesQueue = []; // File d'attente pour les candidats ICE
 
 // Configuration serveur STUN Google (pour NAT traversal)
 const config = {
@@ -108,7 +109,7 @@ function openWebSocket(username) {
       case "candidate":
         if (data.candidate) {
           console.log(`Candidat ICE reçu de ${data.name}.`);
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          await handleCandidate(data);
         }
         break;
       case "login":
@@ -256,7 +257,19 @@ async function handleOffer(sdp) {
   console.log("handleOffer: Traitement de l'offre reçue.");
   await setupConnection();
 
+  // Réinitialiser la file d'attente des candidats ICE pour cette nouvelle offre
+  iceCandidatesQueue = [];
+
   await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp }));
+  console.log("handleOffer: Description distante (offre) définie.");
+
+  // Ajouter les candidats ICE en attente après que la description distante est définie
+  iceCandidatesQueue.forEach(candidate => {
+    pc.addIceCandidate(new RTCIceCandidate(candidate));
+    console.log("handleOffer: Ajout d'un candidat ICE en attente.");
+  });
+  iceCandidatesQueue = []; // Vider la file d'attente
+
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
 
@@ -270,18 +283,37 @@ async function handleOffer(sdp) {
 }
 
 async function handleAnswer(data) {
+  console.log("handleAnswer: Traitement de la réponse reçue.");
   await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: data.sdp }));
+  console.log("handleAnswer: Description distante (réponse) définie.");
+
+  // Ajouter les candidats ICE en attente après que la description distante est définie
+  iceCandidatesQueue.forEach(candidate => {
+    pc.addIceCandidate(new RTCIceCandidate(candidate));
+    console.log("handleAnswer: Ajout d'un candidat ICE en attente.");
+  });
+  iceCandidatesQueue = []; // Vider la file d'attente
+
   document.getElementById("status").textContent = `Réponse reçue de ${data.name}`;
 }
 
 async function handleCandidate(data) {
-  if (pc && data.candidate) {
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-      document.getElementById("status").textContent = `Candidat ICE reçu de ${data.name}`;
-    } catch (e) {
-      console.error('Erreur ajout candidat ICE:', e);
+  if (pc) {
+    if (pc.remoteDescription) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        document.getElementById("status").textContent = `Candidat ICE reçu de ${data.name}`;
+        console.log("handleCandidate: Candidat ICE ajouté directement.");
+      } catch (e) {
+        console.error('handleCandidate: Erreur ajout candidat ICE:', e);
+      }
+    } else {
+      // Mettre en file d'attente si la description distante n'est pas encore définie
+      iceCandidatesQueue.push(data.candidate);
+      console.log("handleCandidate: Candidat ICE mis en file d'attente.");
     }
+  } else {
+    console.warn("handleCandidate: RTCPeerConnection n'est pas initialisé.");
   }
 }
 
